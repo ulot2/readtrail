@@ -1,6 +1,6 @@
 // The only place that touches SQLite. Everything else sends it a message.
 import sqlite3InitModule from './vendor/sqlite/sqlite3.mjs';
-import { fuse, normalizeUrl, toMatch } from './lib.js';
+import { fuse, normalizeUrl, PREFIX_FROM, toMatch } from './lib.js';
 
 const SCHEMA = `
 DROP TABLE IF EXISTS spike;
@@ -359,9 +359,17 @@ const ops = {
     return { merged: bindings.length };
   },
 
+  // The last three fields answer one question: is the worker running the code on
+  // disk? A benchmark measuring a stale build wastes an hour and looks like a
+  // failed fix, which is exactly what happened once.
   stats: () => ({
     pages: db.selectValue('SELECT count(*) FROM pages'),
     chars: db.selectValue('SELECT coalesce(sum(length(text)), 0) FROM pages'),
+    prefixFrom: PREFIX_FROM,
+    hasIndex: !!db.selectValue(
+      "SELECT 1 FROM sqlite_master WHERE type = 'index' AND name = 'pages_by_last_at'"
+    ),
+    ranksOnce: true,
   }),
 
   // Development only. Adds synthetic pages, then times five shapes of query.
