@@ -164,15 +164,54 @@ others should have had.
 
 ### After
 
-Not measured yet. Re-run layer 11 in [TESTING.md](TESTING.md).
-
 | Pages | Size | `t1` prefix | `t0 t3` | `t0` | Browse | `uniq7` |
 |---|---|---|---|---|---|---|
-| 25,004 | | | | | | |
-| 40,004 | | | | | | |
+| 5,004 | 35.0 MB | 66 ms | 96 ms | 94 ms | 1.4 ms | 5.9 ms |
+| 10,004 | 69.7 MB | 112 ms | 162 ms | 145 ms | 1.2 ms | 8.6 ms |
+| 15,004 | 104.1 MB | 151 ms | 201 ms | 189 ms | 1.2 ms | 8.3 ms |
+| 20,004 | 138.5 MB | 189 ms | 265 ms | 226 ms | 1.3 ms | 7.8 ms |
+| 25,004 | 173.1 MB | 233 ms | 303 ms | 276 ms | 1.1 ms | 8.2 ms |
+| 30,004 | 207.3 MB | 277 ms | 348 ms | 321 ms | 1.1 ms | 7.7 ms |
+| 35,004 | 241.8 MB | 307 ms | 401 ms | 368 ms | 1.1 ms | 8.0 ms |
+| 40,004 | 277.2 MB | 341 ms | 452 ms | 417 ms | 1.7 ms | 8.1 ms |
 
-Size describes the benchmark, not your reading. Seeded pages are built from a
-synthetic vocabulary, so megabytes per page here says nothing about real
+### The difference
+
+Measured at the two sizes both runs share.
+
+| Query | 25,004 before | after | 40,004 before | after | Gain |
+|---|---|---|---|---|---|
+| Browse | 137 ms | 1.1 ms | 375 ms | 1.7 ms | 220x |
+| `t1` prefix | 7,331 ms | 233 ms | 12,152 ms | 341 ms | 36x |
+| `t0 t3` | 1,798 ms | 303 ms | 2,959 ms | 452 ms | 6.5x |
+| `t0` | 450 ms | 276 ms | 825 ms | 417 ms | 2.0x |
+| `uniq7` | 12.9 ms | 8.2 ms | 10.6 ms | 8.1 ms | 1.3x |
+
+Each fix shows up as its own number. The index turned browse from a scan of
+every row into an index walk, which is the 220x. Ranking once instead of twice
+halved `t0` exactly, 825 to 417, which is the arithmetic saying the second
+ranking was the whole of the waste. The prefix gate accounts for the 36x on
+`t1`, because a two-letter prefix reached over a thousand terms and now reaches
+one. `t0 t3` gained from both the prefix gate and the single ranking, and 6.5x
+is close to the 2x and 3x multiplied together.
+
+Browse is now flat. It costs the same at 40,000 pages as at 5,000, which is what
+an index is for.
+
+### What is still slow, and why that is acceptable
+
+A word appearing on nearly every page costs 417 ms at 40,000 pages. That is the
+ranking itself: `bm25()` scores every matching document before `LIMIT` takes 50,
+and FTS5 offers no way to rank fewer. Removing it means giving up ranked results.
+
+It is acceptable because of what it measures. `t0` is a word on almost every
+page, the equivalent of searching an English archive for "the". A real search is
+closer to `uniq7`, which stays at 8 ms across an eightfold growth. A personal
+archive also grows slowly: at 20,000 pages, more than most people read in a
+decade, the worst case is 226 ms.
+
+Size describes the benchmark, not your reading. Seeded pages use a synthetic
+vocabulary, so roughly 7 MB per 1,000 pages here says nothing about real
 articles.
 
 ## Next

@@ -221,11 +221,18 @@ await chrome.runtime.sendMessage({ type: 'db', op: 'unseed' })
 
 What the numbers mean:
 
-| Number | Healthy | Act when |
+These bands come from the run recorded in the README, not from a guess.
+
+| Number | Healthy at 40,000 pages | Act when |
 |---|---|---|
-| Median search time | under 20 ms | over 100 ms |
-| Browse time | under 10 ms | over 50 ms |
-| Megabytes per 1,000 pages | 2 to 5 | far above 10 |
+| A rare word, `uniq7` | under 15 ms | over 50 ms |
+| A common word, `t0` | under 500 ms | over 1,000 ms |
+| A prefix, `t1` | under 500 ms | over 1,000 ms |
+| Browse | under 5 ms | over 20 ms |
+| Megabytes per 1,000 pages | about 7 | far above 10 |
+
+Browse must stay flat as the archive grows. If it climbs with the page count,
+the `last_at` index is missing or unused, and that is the first thing to check.
 
 If a query drags, look at the ranking first. FTS5 scores every matching row
 before `LIMIT` cuts the list, so a word on every page costs the most.
