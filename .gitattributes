@@ -1,0 +1,5 @@
+# One line ending everywhere, so a clone on Linux or macOS shows no phantom diff.
+* text=auto eol=lf
+
+# Never let text rules touch the generated icons.
+*.png binary
