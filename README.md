@@ -128,17 +128,12 @@ text. Importing the same file twice changes nothing.
 
 ## Measurements
 
-Run layer 11 in [TESTING.md](TESTING.md), then replace these blanks. These
-numbers are the reason a reader believes the rest of the file.
+Not measured yet.
 
-Machine: fill in. Chrome version: fill in.
-
-| Pages | Database size | Median search | Browse |
-|---|---|---|---|
-| 5,000 | | | |
-| 10,000 | | | |
-| 15,000 | | | |
-| 20,000 | | | |
+The benchmark is built and runs on demand. Layer 11 in [TESTING.md](TESTING.md)
+starts it and carries the table to paste back here. This section stays empty
+until it has run on a named machine, because a number nobody measured would be
+worse than no number at all.
 
 ## Next
 

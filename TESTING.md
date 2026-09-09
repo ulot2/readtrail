@@ -230,6 +230,34 @@ What the numbers mean:
 If a query drags, look at the ranking first. FTS5 scores every matching row
 before `LIMIT` cuts the list, so a word on every page costs the most.
 
+### Writing the numbers down
+
+The console gives you one summary table, then one query table per size. Paste
+this block into the Measurements section of the README and fill it in.
+
+```markdown
+Machine: processor and memory. Chrome version: from `chrome://version`.
+
+| Pages | Database size | Median search | Browse |
+|---|---|---|---|
+| 5,000 | | | |
+| 10,000 | | | |
+| 15,000 | | | |
+| 20,000 | | | |
+
+Median search is the `t0` query, a word on nearly every page. It is the slowest
+case, not the typical one.
+```
+
+Every column comes from one place:
+
+| Column | Where it comes from |
+|---|---|
+| Pages | `pages`, in the summary table |
+| Database size | `megabytes`, in the summary table |
+| Median search | `medianMs` on the `t0` row of that size's query table |
+| Browse | `medianMs` on the `(browse)` row of that size's query table |
+
 ## Layer 12: export and import
 
 Test the file itself:
