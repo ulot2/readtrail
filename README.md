@@ -128,12 +128,52 @@ text. Importing the same file twice changes nothing.
 
 ## Measurements
 
-Not measured yet.
+The first run failed, which is the point of running it.
 
-The benchmark is built and runs on demand. Layer 11 in [TESTING.md](TESTING.md)
-starts it and carries the table to paste back here. This section stays empty
-until it has run on a named machine, because a number nobody measured would be
-worse than no number at all.
+Machine: fill in. Chrome version: fill in. Synthetic pages, about 700 words each.
+
+### Before
+
+| Pages | Size | `t1` prefix | `t0 t3` | `t0` | Browse | `uniq7` |
+|---|---|---|---|---|---|---|
+| 25,004 | 173.0 MB | 7,331 ms | 1,798 ms | 450 ms | 137 ms | 12.9 ms |
+| 30,004 | 207.2 MB | 8,846 ms | 2,124 ms | 597 ms | 163 ms | 11.9 ms |
+| 35,004 | 241.8 MB | 11,391 ms | 2,594 ms | 709 ms | 152 ms | 12.3 ms |
+| 40,004 | 277.1 MB | 12,152 ms | 2,959 ms | 825 ms | 375 ms | 10.6 ms |
+
+Only the rare word was healthy. Everything else grew with the archive, and a
+twelve second search is not a search. Three separate causes:
+
+**Browse had no index.** Browsing and the date filter both order by `last_at`,
+and nothing indexed it, so every browse scanned all 40,000 rows. One line of SQL.
+
+**Every search ranked twice.** The related-words feature added on day 13 ranked
+the whole match once to count the results, then ranked it again to fetch rows.
+Almost no search needs expanding, so almost every search paid double. The count
+now comes from the result itself, so the second ranking is gone.
+
+**Short prefixes matched most of the vocabulary.** Typing produces a prefix
+query, and a two-letter prefix reaches every term that starts with it. The index
+has to union all of them and then score every document that matches any. Prefix
+matching now begins at three characters, which is where a prefix starts to mean
+something anyway.
+
+The rare word never moved, at about 11 ms across a fourfold growth in the
+archive. That is what a healthy query looks like here, and it is the shape the
+others should have had.
+
+### After
+
+Not measured yet. Re-run layer 11 in [TESTING.md](TESTING.md).
+
+| Pages | Size | `t1` prefix | `t0 t3` | `t0` | Browse | `uniq7` |
+|---|---|---|---|---|---|---|
+| 25,004 | | | | | | |
+| 40,004 | | | | | | |
+
+Size describes the benchmark, not your reading. Seeded pages are built from a
+synthetic vocabulary, so megabytes per page here says nothing about real
+articles.
 
 ## Next
 

@@ -53,7 +53,15 @@ test('toMatch survives punctuation that would otherwise break FTS5', () => {
   assert.equal(toMatch("don't"), '"don\'t"*');
   assert.equal(toMatch('state-of-the-art'), '"state-of-the-art"*');
   assert.equal(toMatch('say "hi"'), '"say" """hi"""*');
-  assert.equal(toMatch('a OR b'), '"a" "OR" "b"*');
+  assert.equal(toMatch('a OR b'), '"a" "OR" "b"'); // "b" is too short to match by prefix
+});
+
+test('toMatch only matches by prefix once the word is long enough', () => {
+  assert.equal(toMatch('quantum'), '"quantum"*');
+  assert.equal(toMatch('qua'), '"qua"*');
+  assert.equal(toMatch('qu'), '"qu"');
+  assert.equal(toMatch('a'), '"a"');
+  assert.equal(toMatch('neural ne'), '"neural" "ne"');
 });
 
 test('toMatch returns nothing for an empty box, which means browse', () => {
