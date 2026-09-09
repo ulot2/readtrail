@@ -25,23 +25,32 @@ async function ensureOffscreen() {
   return creating;
 }
 
-async function db(op, args = {}) {
+// `type` is stripped, because it addresses this listener and would otherwise
+// travel on to the offscreen document and mean nothing there.
+async function db(op, { type, ...args } = {}) {
   await ensureOffscreen();
-  return chrome.runtime.sendMessage({ target: 'offscreen', op, ...args });
+  const reply = await chrome.runtime.sendMessage({ target: 'offscreen', op, ...args });
+  return reply ?? { ok: false, error: 'the offscreen document did not answer' };
 }
 
 chrome.runtime.onMessage.addListener((msg, _sender, sendResponse) => {
   if (msg?.type === 'page') {
-    db('save', msg).then((reply) =>
-      reply.ok
-        ? console.log('[archive] saved', reply.result.pages, '|', msg.title)
-        : console.error('[archive] save failed', msg.url, reply.error)
-    );
+    db('save', msg)
+      .then((reply) =>
+        reply.ok
+          ? console.log('[archive] saved', reply.result.pages, '|', msg.title)
+          : console.error('[archive] save failed', msg.url, reply.error)
+      )
+      .catch((err) => console.error('[archive] save failed', msg.url, String(err)));
     return;
   }
 
   if (msg?.type === 'db') {
-    db(msg.op, msg).then(sendResponse);
+    // Always answer. Returning true and then never responding closes the channel
+    // with an error that names this file and explains nothing about the cause.
+    db(msg.op, msg)
+      .then(sendResponse)
+      .catch((err) => sendResponse({ ok: false, error: String(err) }));
     return true; // the reply arrives later, so hold the channel open
   }
 });
