@@ -6,6 +6,7 @@
   "scripts": {
     "vendor": "node vendor.mjs",
     "icons": "node icons.mjs",
+    "pack": "C:/Windows/System32/tar.exe -a -c -f archive-0.1.0.zip manifest.json content.js sw.js offscreen.html offscreen.js db-worker.js lib.js search.html search.js icons vendor",
     "test": "node --test"
   },
   "devDependencies": {

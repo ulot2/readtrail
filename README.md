@@ -3,8 +3,8 @@
 A personal, offline archive of the pages you read. The text stays on your computer
 in a SQLite database. Nothing is sent anywhere.
 
-Status: day 13 of 14. Feature complete. What is left is the store listing, the
-screen capture, and the Measurements table.
+Status: day 14 of 14. Built, measured, and packaged. [STORE.md](STORE.md) has
+the listing text and the submission order.
 
 ## Setup
 
@@ -219,7 +219,9 @@ articles.
 
 ## Next
 
-Day 14: the store listing, a 30-second screen capture, and the Measurements table.
+Submit. `npm run pack` builds the store package, and [STORE.md](STORE.md) has
+every field the dashboard asks for, the screenshots to take, and the shot list
+for the 30-second capture.
 
 Neural embeddings were considered for day 13 and rejected on measurement.
 Manifest V3 forbids remote code, so the inference engine has to ship inside the
