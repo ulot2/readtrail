@@ -37,6 +37,12 @@ export function parseDenylist(text) {
   return [...sites];
 }
 
+// The site a page belongs to, the same way normalizeUrl sees it: no leading www,
+// no port. Stored in its own column so the sidebar can count and filter by it.
+export function hostOf(url) {
+  return new URL(url).hostname.replace(/^www\./, '');
+}
+
 // Reciprocal rank fusion. Two rankings disagree about scale, so comparing their
 // scores directly needs weights nobody can tune honestly. Comparing positions
 // needs none: a page both rankings place high wins, and a page only one of them

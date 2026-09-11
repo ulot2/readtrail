@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fuse, normalizeUrl, parseDenylist, parseRow, toMatch } from './lib.js';
+import { fuse, hostOf, normalizeUrl, parseDenylist, parseRow, toMatch } from './lib.js';
 
 const good = {
   url: 'https://a.com/p',
@@ -82,6 +82,13 @@ test('parseDenylist drops blank lines and repeats', () => {
 
 test('parseDenylist keeps a subdomain, because blocking one is legitimate', () => {
   assert.deepEqual(parseDenylist('mail.google.com'), ['mail.google.com']);
+});
+
+test('hostOf names the site the way normalizeUrl does', () => {
+  assert.equal(hostOf('https://www.example.com/a/b?c=1'), 'example.com');
+  assert.equal(hostOf('https://news.example.com/'), 'news.example.com');
+  assert.equal(hostOf('http://example.com:8080/p'), 'example.com');
+  assert.equal(hostOf('https://EXAMPLE.com'), 'example.com');
 });
 
 test('fuse keeps the order of a single ranking', () => {

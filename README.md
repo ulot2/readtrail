@@ -52,6 +52,9 @@ forgot about cannot quietly leave a hole in the archive.
 
 ## How search works
 
+Every page stores its site in a `host` column, so the sidebar can count pages
+per site with one `GROUP BY` and clicking a site narrows every search to it.
+
 FTS5 does the work. The title carries ten times the weight of the body, and
 `bm25()` ranks the results. `snippet()` returns the matching excerpt already cut
 to size.
@@ -98,7 +101,7 @@ unfindable, because expansion needs at least one result to learn from.
 | `offscreen.html` / `offscreen.js` | A hidden page that owns the worker |
 | `db-worker.js` | Schema, deduplication, search, and the only code that touches SQLite |
 | `lib.js` / `lib.test.js` | URL cleaning and query escaping, plus the tests Node can run |
-| `search.html` / `search.js` | The search page. No framework, on purpose |
+| `search.html` / `search.js` | The app: sidebar of sites, hero search, results with favicons, settings in a native dialog. No framework, on purpose |
 | `vendor.mjs` | Copies dependencies into `vendor/` |
 | `icons.mjs` | Draws the toolbar icons. No design tool, no dependency |
 | `PRIVACY.md` | The privacy policy the store listing points at |

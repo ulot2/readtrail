@@ -44,6 +44,9 @@ extension. Nothing is downloaded while it runs.
 This includes search. Related-word search reads statistics from your own archive
 and nothing else, so a search never leaves your computer either.
 
+The small site icons on the search page come from Chrome's own icon cache,
+through the `favicon` permission. Showing one causes no request.
+
 ## Who can see your archive
 
 You, on the browser where it is stored. Archive does not sell, share, or transfer

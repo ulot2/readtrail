@@ -325,6 +325,37 @@ get, so with no results there is nothing to learn from.
 A good archive to test against needs a few dozen articles across two or three
 subjects. With ten pages the statistics have nothing to say.
 
+## Layer 14: the page
+
+The page was rebuilt as two panes. These checks cover what changed.
+
+1. Reload the extension card and open the page. The sidebar must list your
+   sites with counts, including pages archived before this change. That proves
+   the migration filled the new host column.
+2. Add the counts in the sidebar. They must equal the number next to "All sites".
+3. Click a site. Results must narrow to it, and a chip reading "in that-site"
+   must appear under the search box. Click the chip's cross. Everything returns.
+4. Look at any result. A small site icon must sit at the start of its first
+   line. A site Chrome has never seen shows a grey globe, which is fine.
+5. Hover a result. "Delete page" and "Delete site" must appear on the right.
+   Move away. They must fade.
+6. Press Tab until a result is focused. The same two actions must appear
+   without the mouse.
+7. Click Settings. A dialog must open. Press Esc. It must close. Open it again
+   and make sure that the denylist, export, import, and delete-by-age all still
+   work exactly as in layers 9, 10 and 12.
+8. Search for a word that is nowhere in your archive. A centred block must say
+   "Nothing matches" with a hint. Set the range to Today and search again. The
+   hint must now also say to set the range to Any time.
+9. Click somewhere blank on the page, then press `/`. The search box must take
+   focus with its text selected.
+10. Narrow the window below 720 pixels. The sidebar must move above the results
+    and the site list must wrap.
+
+Run the benchmark once more at 5,000 pages. Browse must still sit near 1 ms.
+The site filter adds one comparison to every query, and this proves that
+comparison costs nothing.
+
 ## Not tested yet
 
 Everything built is covered above. Day 14 adds the store listing, which is

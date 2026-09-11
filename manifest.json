@@ -3,7 +3,7 @@
   "name": "Archive",
   "version": "0.1.0",
   "description": "Search everything you have read. The text stays on your computer, never on a server.",
-  "permissions": ["storage", "offscreen"],
+  "permissions": ["storage", "offscreen", "favicon"],
   "host_permissions": ["http://*/*", "https://*/*"],
   "background": {
     "service_worker": "sw.js",

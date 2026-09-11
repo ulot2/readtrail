@@ -1,6 +1,6 @@
 // The only place that touches SQLite. Everything else sends it a message.
 import sqlite3InitModule from './vendor/sqlite/sqlite3.mjs';
-import { fuse, normalizeUrl, PREFIX_FROM, toMatch } from './lib.js';
+import { fuse, hostOf, normalizeUrl, PREFIX_FROM, toMatch } from './lib.js';
 
 const SCHEMA = `
 DROP TABLE IF EXISTS spike;
@@ -8,6 +8,7 @@ DROP TABLE IF EXISTS spike;
 CREATE TABLE IF NOT EXISTS pages (
   id       INTEGER PRIMARY KEY,
   url      TEXT NOT NULL UNIQUE,
+  host     TEXT,
   title    TEXT NOT NULL,
   text     TEXT NOT NULL,
   hash     TEXT NOT NULL,
@@ -56,8 +57,8 @@ END;
 
 // Revisiting a page bumps the counters. The text is rewritten only when it changed.
 const UPSERT = `
-INSERT INTO pages (url, title, text, hash, first_at, last_at)
-VALUES (?, ?, ?, ?, ?, ?)
+INSERT INTO pages (url, host, title, text, hash, first_at, last_at)
+VALUES (?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(url) DO UPDATE SET
   last_at = excluded.last_at,
   visits  = visits + 1,
@@ -70,8 +71,8 @@ ON CONFLICT(url) DO UPDATE SET
 // first visit and its highest visit count, and the newer copy wins on the text.
 // This is why import cannot use UPSERT, which counts every write as a new visit.
 const MERGE = `
-INSERT INTO pages (url, title, text, hash, first_at, last_at, visits)
-VALUES (?, ?, ?, ?, ?, ?, ?)
+INSERT INTO pages (url, host, title, text, hash, first_at, last_at, visits)
+VALUES (?, ?, ?, ?, ?, ?, ?, ?)
 ON CONFLICT(url) DO UPDATE SET
   first_at = min(pages.first_at, excluded.first_at),
   last_at  = max(pages.last_at,  excluded.last_at),
@@ -84,14 +85,17 @@ ON CONFLICT(url) DO UPDATE SET
 // char(1) and char(2) wrap each hit. They are control characters, not markup, so
 // the page can escape the text first and turn them into <mark> after. Archived
 // page content therefore can never become HTML.
+//
+// The site filter is "(?3 = '' OR p.host = ?3)": one statement serves both the
+// filtered and the unfiltered case, so there is no second copy to keep in step.
 const SEARCH = `
-SELECT p.id, p.url, p.title, p.last_at, p.visits,
+SELECT p.id, p.url, p.host, p.title, p.last_at, p.visits,
        snippet(pages_fts, 1, char(1), char(2), ' ... ', 24) AS excerpt
 FROM pages_fts f
 JOIN pages p ON p.id = f.rowid
-WHERE pages_fts MATCH ? AND p.last_at >= ?
+WHERE pages_fts MATCH ?1 AND p.last_at >= ?2 AND (?3 = '' OR p.host = ?3)
 ORDER BY bm25(pages_fts, 10.0, 1.0)
-LIMIT ?
+LIMIT ?4
 `;
 
 // The ranking pass. Ids only, because merging two rankings needs the order alone.
@@ -99,15 +103,15 @@ const SEARCH_IDS = `
 SELECT f.rowid AS id
 FROM pages_fts f
 JOIN pages p ON p.id = f.rowid
-WHERE pages_fts MATCH ? AND p.last_at >= ?
+WHERE pages_fts MATCH ?1 AND p.last_at >= ?2 AND (?3 = '' OR p.host = ?3)
 ORDER BY bm25(pages_fts, 10.0, 1.0)
-LIMIT ?
+LIMIT ?4
 `;
 
 // The final pass. Its match holds the original query and the related words
 // together, so a page found only by a related word still gets an excerpt.
 const FETCH = `
-SELECT p.id, p.url, p.title, p.last_at, p.visits,
+SELECT p.id, p.url, p.host, p.title, p.last_at, p.visits,
        snippet(pages_fts, 1, char(1), char(2), ' ... ', 24) AS excerpt
 FROM pages_fts f
 JOIN pages p ON p.id = f.rowid
@@ -116,11 +120,20 @@ WHERE pages_fts MATCH ?
 
 // Shown when the box is empty, so the page is useful before you type anything.
 const BROWSE = `
-SELECT id, url, title, last_at, visits, substr(text, 1, 220) AS excerpt
+SELECT id, url, host, title, last_at, visits, substr(text, 1, 220) AS excerpt
 FROM pages
-WHERE last_at >= ?
+WHERE last_at >= ?1 AND (?2 = '' OR host = ?2)
 ORDER BY last_at DESC
-LIMIT ?
+LIMIT ?3
+`;
+
+// Every site that has pages, biggest first. Thirty is enough for a sidebar.
+const SITES = `
+SELECT host, count(*) AS pages
+FROM pages
+GROUP BY host
+ORDER BY pages DESC, host
+LIMIT 30
 `;
 
 async function sha256(s) {
@@ -136,7 +149,29 @@ const ready = (async () => {
   const pool = await sqlite3.installOpfsSAHPoolVfs({ name: 'archive' });
   db = new pool.OpfsSAHPoolDb('/archive.db');
   db.exec(SCHEMA);
+  migrate();
 })();
+
+// Pages archived before the host column existed get one on the next start.
+// The update leaves the hash alone, so the search index is not rebuilt.
+function migrate() {
+  const columns = db.selectValues("SELECT name FROM pragma_table_info('pages')");
+  if (!columns.includes('host')) db.exec('ALTER TABLE pages ADD COLUMN host TEXT');
+
+  const missing = db.selectObjects('SELECT id, url FROM pages WHERE host IS NULL');
+  if (missing.length) {
+    const fill = db.prepare('UPDATE pages SET host = ? WHERE id = ?');
+    try {
+      db.transaction(() => {
+        for (const { id, url } of missing) fill.bind([hostOf(url), id]).stepReset();
+      });
+    } finally {
+      fill.finalize();
+    }
+  }
+
+  db.exec('CREATE INDEX IF NOT EXISTS pages_by_host ON pages(host)');
+}
 
 // --- Development only, from here to the end of this block. -------------------
 // This exists to answer one question: does search stay fast at 20,000 pages?
@@ -158,7 +193,7 @@ function seed(count) {
   const started = performance.now();
   const first = db.selectValue("SELECT count(*) FROM pages WHERE hash LIKE 'seed-%'");
   const insert = db.prepare(
-    'INSERT OR IGNORE INTO pages (url, title, text, hash, first_at, last_at) VALUES (?,?,?,?,?,?)'
+    'INSERT OR IGNORE INTO pages (url, host, title, text, hash, first_at, last_at) VALUES (?,?,?,?,?,?,?)'
   );
 
   try {
@@ -166,9 +201,11 @@ function seed(count) {
     db.transaction(() => {
       for (let i = first; i < first + count; i++) {
         const when = Date.now() - Math.floor(Math.random() * 365 * 86400000);
+        const site = `seed${i % 200}.example`; // 200 hosts, so site deletion scales too
         insert
           .bind([
-            `https://seed${i % 200}.example/a/${i}`, // 200 hosts, so site deletion scales too
+            `https://${site}/a/${i}`,
+            site,
             `Seeded article ${i} about ${pick()} and ${pick()}`,
             body(i),
             `seed-${i}`, // the marker that makes these rows removable later
@@ -260,18 +297,22 @@ function relatedTerms(ids, alreadyTyped) {
 const ops = {
   save: async ({ url, title, text }) => {
     const now = Date.now();
-    db.exec({ sql: UPSERT, bind: [normalizeUrl(url), title, text, await sha256(text), now, now] });
+    const clean = normalizeUrl(url);
+    db.exec({
+      sql: UPSERT,
+      bind: [clean, hostOf(clean), title, text, await sha256(text), now, now],
+    });
     return { pages: db.selectValue('SELECT count(*) FROM pages') };
   },
 
-  search: ({ q = '', since = 0, limit = 50 }) => {
+  search: ({ q = '', since = 0, host = '', limit = 50 }) => {
     const match = toMatch(q);
-    if (!match) return { mode: 'browse', hits: db.selectObjects(BROWSE, [since, limit]) };
+    if (!match) return { mode: 'browse', hits: db.selectObjects(BROWSE, [since, host, limit]) };
 
     // Rank once. The old code ranked the whole match twice on every keystroke,
     // once to decide whether to expand and once to fetch rows, which doubled the
     // cost of every search that did not need expanding, meaning almost all of them.
-    const hits = db.selectObjects(SEARCH, [match, since, limit]);
+    const hits = db.selectObjects(SEARCH, [match, since, host, limit]);
     if (hits.length >= EXPAND_BELOW) return { mode: 'search', hits };
 
     // Below that line the query matched almost nothing, so it was cheap, and the
@@ -282,7 +323,7 @@ const ops = {
     if (!related.length) return { mode: 'search', hits };
 
     const relatedMatch = related.map((t) => `"${t}"`).join(' OR ');
-    const alsoFound = db.selectValues(SEARCH_IDS, [relatedMatch, since, 200]);
+    const alsoFound = db.selectValues(SEARCH_IDS, [relatedMatch, since, host, 200]);
 
     // Two rankings, merged by position rather than by score. See fuse() in lib.js.
     const order = fuse([found, alsoFound]).slice(0, limit);
@@ -306,10 +347,7 @@ const ops = {
     }
 
     if (host) {
-      db.exec({
-        sql: "DELETE FROM pages WHERE url LIKE 'http://' || ?1 || '/%' OR url LIKE 'https://' || ?1 || '/%'",
-        bind: [host],
-      });
+      db.exec({ sql: 'DELETE FROM pages WHERE host = ?', bind: [host] });
     } else if (before) {
       db.exec({ sql: 'DELETE FROM pages WHERE last_at < ?', bind: [before] });
     } else {
@@ -335,15 +373,19 @@ const ops = {
   // to decide whether the search index needs rebuilding.
   merge: async ({ rows = [] }) => {
     const bindings = await Promise.all(
-      rows.map(async (r) => [
-        normalizeUrl(r.url),
-        r.title,
-        r.text,
-        await sha256(r.text),
-        r.first_at,
-        r.last_at,
-        r.visits,
-      ])
+      rows.map(async (r) => {
+        const clean = normalizeUrl(r.url);
+        return [
+          clean,
+          hostOf(clean),
+          r.title,
+          r.text,
+          await sha256(r.text),
+          r.first_at,
+          r.last_at,
+          r.visits,
+        ];
+      })
     );
 
     const stmt = db.prepare(MERGE);
@@ -362,8 +404,11 @@ const ops = {
   // The last three fields answer one question: is the worker running the code on
   // disk? A benchmark measuring a stale build wastes an hour and looks like a
   // failed fix, which is exactly what happened once.
+  sites: () => ({ sites: db.selectObjects(SITES) }),
+
   stats: () => ({
     pages: db.selectValue('SELECT count(*) FROM pages'),
+    sites: db.selectValue('SELECT count(DISTINCT host) FROM pages'),
     chars: db.selectValue('SELECT coalesce(sum(length(text)), 0) FROM pages'),
     prefixFrom: PREFIX_FROM,
     hasIndex: !!db.selectValue(
